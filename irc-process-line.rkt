@@ -97,10 +97,8 @@
     (log "=> ~a" str)
     (fprintf (irc-connection-out-port (*irc-connection*)) "~a~%" str)))
 
-(define (pm #:notice? [notice? #f] target fmt . args)
-  (out "~a" (format "~a ~a :~a"
-                    (if notice? "NOTICE" "PRIVMSG")
-                    target (apply format fmt args))))
+(define (pm #:notice? [notice? #f] target message)
+  ((if notice? irc-send-notice irc-send-message) (*irc-connection*) target message))
 
 ;; ----------------------------------------------------------------------------
 ;; General IRC protocol matchers
@@ -110,14 +108,9 @@
 
 (define (send-NICK-and-USER)
   (when (eq? (unbox *authentication-state*) 'havent-even-tried)
-    (out "CAP REQ :sasl")
     (if (*nickserv-password*)
-          (begin
-            (out "NICK ~a" (unbox *my-nick*))
-            (out "USER luser unknown-host localhost :Eric Hanchrow's bot, version ~a"
-                 (git-version))
-            (out "AUTHENTICATE PLAIN"))
-          (log "I'd register my nick, if I had a password."))
+        (pm "NickServ" (format "identify ~a" (*nickserv-password*)))
+        (log "I'd register my nick, if I had a password."))
     (set-box! *authentication-state* 'tried)))
 
 ;; This message doesn't contain much information; it really just means
@@ -188,11 +181,11 @@
          (when (equal? "VERSION" request-word)
            (pm #:notice? #t
                nick
-               "\u0001VERSION ~a (eric.hanchrow@gmail.com):v4.~a:Racket scheme version ~a on ~a\0001"
-               (unbox *my-nick*)
-               (git-version)
-               (version)
-               (system-type 'os)))]
+               (format "\u0001VERSION ~a (eric.hanchrow@gmail.com):v4.~a:Racket scheme version ~a on ~a\0001"
+                       (unbox *my-nick*)
+                       (git-version)
+                       (version)
+                       (system-type 'os))))]
 
         [(list "PRIVMSG" target (colon first-word) rest ...)
          ;; Unspeakable hack -- "irc-process-line" is way too dumb, and
@@ -240,7 +233,7 @@
                                        (pm target "tinyurl is feeling poorly today: ~a (~a)"
                                            (exn:fail:http-code e)
                                            (exn-message e)))])
-                      (pm target "~a" (make-tiny-url url))))
+                      (pm target (make-tiny-url url))))
                   ]
                  [_ #f])))
            (when (and (regexp-match? #rx"^(?i:let(')?s)" first-word)
@@ -426,7 +419,7 @@
                             (if (is-master?) "* " "")
                             (format (if (is-master?) "*~a: " "~a: ")
                                     for-whom))])
-    (pm response-target "~a~a" response-prefix (apply format fmt args))))
+    (pm response-target (format "~a~a" response-prefix (apply format fmt args)))))
 
 ;; ----------------------------------------------------------------------------
 ;; Misc utilities
@@ -471,7 +464,7 @@
   (let ([q (one-quote)])
     ;; special case: jordanb doesn't want quotes prefixed with his nick.
     (match (*for-whom*)
-      [(regexp #rx"^jordanb") (pm (*response-target*) "~a" q)]
+      [(regexp #rx"^jordanb") (pm (*response-target*) q)]
       [_ (reply "~a" q)])))
 
 (defverb (source) "my source location"
@@ -639,7 +632,7 @@
                             (msg  (string-append msg* " to get it (case sensitive)")))
                        (if (not (regexp-match? #rx"^#" response-target))
                          ;; announce privately if given privately
-                         (pm give-to "~a ~a" for-whom msg)
+                         (pm give-to (format "~a ~a" for-whom msg))
                          ;; cheap no-nag feature
                          (let* ((l last-give-instructions)
                                 (msg (if (and l
@@ -650,7 +643,7 @@
                            (set! last-give-instructions
                                  (cons response-target (current-seconds)))
                            (pm response-target
-                               "~a: ~a ~a" give-to for-whom msg))))
+                               (format "~a: ~a ~a" give-to for-whom msg)))))
                      #t])) ; said something
             (define (display-output name output-getter)
               (let ([output (output-getter s)])
@@ -840,10 +833,10 @@
     (reply "not a proper channel name")))
 
 (defverb #:master (tell who stuff ...) "tell me to tell someone something"
-  (pm (*response-target*) "~a: ~a" who (string-join stuff)))
+  (pm (*response-target*) (format "~a: ~a" who (string-join stuff))))
 
 (defverb #:master (emote stuff ...) "tell me to do something"
-  (pm (*response-target*) "\1ACTION ~a\1" (string-join stuff)))
+  (pm (*response-target*) (format "\1ACTION ~a\1" (string-join stuff))))
 
 (defverb #:master (ghost victim) "kill an errant client that's using my favorite nick"
   (pm "NickServ" (format "ghost ~a ~a" victim (*nickserv-password*))))
