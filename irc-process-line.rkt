@@ -31,16 +31,6 @@
 (define (split-words str)
   (regexp-match* rx:word str))
 
-;; (colon w) is a pattern that matches coloned words, and registers
-;; their position
-(define (starts-with-colon str)
-  (cond [(regexp-match-positions #rx"^:(.*)" str)
-         => (lambda (m) (substring+posn str (caadr m)))]
-        [else #f]))
-(define-match-expander colon
-  (syntax-rules ()
-    [(colon w) (app starts-with-colon w)]))
-
 (define (describe-since when)
   (spelled-out-time (- (current-seconds) when)))
 
@@ -132,10 +122,8 @@
       (match (*current-message*)
         [(irc-message _ "KICK" (list target victim mumblage) _)
          (espy target (format "kicking ~a" victim) mumblage)]
-        ;; list "MODE" target mode-data ...)
         [(irc-message _ "MODE" (list target mode-data ...) _)
          (espy target (format "changing the mode to '~a'" mode-data) '())]
-        ;; (list "INVITE" lucky-recipient (colon party) further ...)
         [(irc-message _ "INVITE" (list lucky-recipient party further ...) _)
          (espy host (format "inviting ~a to ~a" lucky-recipient party)
                further)]
@@ -926,24 +914,7 @@
                     [(string? emergency) emergency]
                     [(list? emergency) (string-join emergency " ")]
                     [else (format "~a" emergency)])]))
-;; Sometimes we need to take a substring of a word -- so use this to
-;; register its info too
-(define (substring+posn str b [e (string-length str)])
-  (let ([p (hash-ref word-posns str #f)]
-        [r (substring str b e)])
-    (when p
-      (hash-set! word-posns r
-                 (cons (car p) (cons (+ (cadr p) b) (+ (cadr p) e)))))
-    r))
 
 (define (irc-process-line message)
-  (define line (irc-message-content message))
-  (let* ([posns (regexp-match-positions* rx:word line)]
-         [words (map (lambda (p)
-                       (let ([s (substring line (car p) (cdr p))])
-                         (hash-set! word-posns s (cons line p))
-                         s))
-                     posns)])
-    (when (null? words) (log "BAD IRC LINE: ~a" line))
-    (parameterize ([*current-message* message])
-      (domatchers IRC-COMMAND message))))
+  (parameterize ([*current-message* message])
+    (domatchers IRC-COMMAND message)))
