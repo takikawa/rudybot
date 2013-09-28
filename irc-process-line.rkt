@@ -92,7 +92,7 @@
 ;; ----------------------------------------------------------------------------
 ;; General IRC protocol matchers
 
-(defmatcher IRC-COMMAND "ERROR"
+(defmatcher IRC-COMMAND (irc-message _ "ERROR" _ _)
   (log "Uh oh!"))
 
 (define (send-NICK-and-USER)
@@ -112,11 +112,11 @@
 ;; This message doesn't contain much information; it really just means
 ;; we've connected.  And not all servers emit this anyway.  The server
 ;; on freenode did up to about January 2010
-(defmatcher IRC-COMMAND "NOTICE"
+(defmatcher IRC-COMMAND (irc-message _ "NOTICE" _ _)
   (send-NICK-and-USER))
 
-(defmatcher IRC-COMMAND (regexp #rx"^:((.*)!(.*)@(.*))$"
-                                (list _ full-id nick id host))
+(defmatcher IRC-COMMAND (irc-message (regexp #rx"^((.*)!(.*)@(.*))$" (list _ full-id nick id host))
+                                     _ _ _)
   (define (espy target action words)
     (note-sighting (make-sighting nick target (current-seconds) action words)))
   (if (equal? nick (unbox *my-nick*))
@@ -281,19 +281,7 @@
         [_ (log "~a said ~s, which I don't understand" nick
                 (text-from-word (*current-words*)))])))
 
-(defmatcher IRC-COMMAND "AUTHENTICATE"
-  (when (equal? '("+") (*current-words*))
-        (out "AUTHENTICATE ~a"
-             (bytes->string/utf-8
-              (let ((username  (unbox *my-nick*))
-                    ;; I suspect this account-name can be identical to
-                    ;; the password; I simply haven't yet tried that
-                    (account-name "rudebot")
-                    (password (*nickserv-password*)))
-                (base64-encode  (string->bytes/utf-8 (format "~a\0~a\0~a" account-name username password)) #"")))))
-  )
-
-(defmatcher IRC-COMMAND (colon host)
+(defmatcher IRC-COMMAND (irc-message host _ _ _)
   (match (*current-words*)
 
     ;; ircd-seven (http://freenode.net/seven.shtml) emits this as soon
@@ -940,7 +928,8 @@
     r))
 
 (define rx:word #px"(?:\\p{L}+|\\p{N}+|\\p{S}|\\p{P})+")
-(define (irc-process-line line)
+(define (irc-process-line message)
+  (define line (irc-message-content message))
   (let* ([posns (regexp-match-positions* rx:word line)]
          [words (map (lambda (p)
                        (let ([s (substring line (car p) (cdr p))])
@@ -948,5 +937,6 @@
                          s))
                      posns)])
     (when (null? words) (log "BAD IRC LINE: ~a" line))
-    (parameterize ([*current-words* (cdr words)])
-      (domatchers IRC-COMMAND (car words)))))
+    (parameterize ([*current-message* message]
+                   [*current-words* (cdr words)])
+      (domatchers IRC-COMMAND message))))
