@@ -33,7 +33,7 @@
 ;; some state is put globally, to be able to separate functions conveniently
 (define *irc-output*      (make-parameter (current-output-port)))
 (define *irc-connection*  (make-parameter #f))
-(define *current-words*   (make-parameter #f))
+(define *current-message* (make-parameter #f))
 (define *response-target* (make-parameter #f))
 (define *for-whom*        (make-parameter #f))
 (define *full-id*         (make-parameter #f))
