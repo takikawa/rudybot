@@ -95,8 +95,6 @@
     ;; RFC 1459 suggests that most of this data is ignored.
     (irc-set-user-info (*irc-connection*)
                        "luser"
-                       "unknown-host"
-                       "localhost"
                        (format "Eric Hanchrow's bot, version ~a" (git-version)))
     (if (*nickserv-password*)
         (pm "NickServ" (format "identify ~a" (*nickserv-password*)))
@@ -423,7 +421,7 @@
 (defverb (later "tell" recipient message ...) "backwards-compatible \"tell\""
   (let* ([response-target "memoserv"]
          [for-whom        (*for-whom*)])
-    (pm response-target  "send ~a ~a says: ~a" recipient for-whom (string-join message " "))
+    (pm response-target (format "send ~a ~a says: ~a" recipient for-whom (string-join message " ")))
     (reply "I asked `MemoServ' to forward the message to ~a." recipient)))
 
 (defverb (help ?what) "what tricks can I do?"
