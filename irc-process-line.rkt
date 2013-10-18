@@ -9,6 +9,7 @@
          "sandboxes.rkt"
          "vars.rkt"
          "git-version.rkt"
+         (only-in "http.rkt" exn:fail:http? exn:fail:http-code)
          "userinfo.rkt"
          "utils.rkt"
          "xlate.rkt"
@@ -42,17 +43,23 @@
         (format "No sign of ~a" n)
         (string-join
          (map (lambda (info)
-                (format "~a was seen ~ain ~a ~a ago~a"
-                        (sighting-who   info)
-                        (cond [(sighting-action? info) => (λ (it) (string-append it " "))]
-                              [else ""])
-                        (sighting-where info)
-                        (describe-since (sighting-when  info))
-                        (let ([words (string-join (sighting-words info))])
-                          (if (positive? (string-length words))
-                              (format ", saying \"~a\"" words)
-                              ""))))
+                (string-join
+                 (list
+                  (format "~a was seen" (sighting-who   info))
+                  (cond [(not (string? (sighting-action? info)))
+                         (format "in ~a" (sighting-where info))]
+                        [(equal? "quitting" (sighting-action? info))
+                         (format "~a" (sighting-action? info))]
+                        [else
+                         (format "~a in ~a" (sighting-action? info) (sighting-where info))])
+                  (format "~a ago~a" (describe-since (sighting-when  info))
+                          (let ([words (string-join (sighting-words info))])
+                            (if (positive? (string-length words))
+                                (format ", saying \"~a\"" words)
+                                ""))))
+                 " "))
               ss)
+
          ", and then "))))
 
 ;; For rate limiting -- every time we respond to a direct request, we
@@ -210,11 +217,17 @@
              (for ([word (in-list (cons first-word rest))])
                (match word
                  [(regexp url-regexp (list url _ _))
-                  (with-handlers ([exn? (lambda (e)
-                                          (log "Trouble with tinyurl: ~s" (exn-message e)))])
-                    (when (<= 75 (string-length url))
+                  (when (<= 75 (string-length url))
+                    ;; TODO -- calling this synchronously seems like a
+                    ;; bad idea -- what if the call takes forever?
+                    (with-handlers ([exn:fail:http?
+                                     (lambda (e)
+                                       (pm target "tinyurl is feeling poorly today: ~a (~a)"
+                                           (exn:fail:http-code e)
+                                           (exn-message e)))])
                       (pm target (make-tiny-url url))))
                   ]
+
                  [_ #f])))
            (when (and (regexp-match? #rx"^(?i:let(')?s)" first-word)
                       (regexp-match? #rx"^(?i:jordanb)" nick))
@@ -386,6 +399,14 @@
 (defverb (bug more ...) "You suck."
   (reply "Yes, I know I suck: https://github.com/offby1/rudybot/issues"))
 
+(defverb (tell recipient message ...)
+  "Give RECIPIENT a MESSAGE when we next 'see' them.  Only works where
+\"memoserv\" is available, which in practice, means freenode."
+  (let* ([response-target "memoserv"]
+         [for-whom        (*for-whom*)])
+    (pm response-target  "send ~a ~a" recipient (string-join message " "))
+    (reply "I asked `memosrv' to forward the message to ~a." recipient)))
+
 (defverb (help ?what) "what tricks can I do?"
   (let ([what (and ?what (string->symbol ?what))]
         [master? (is-master?)])
@@ -430,6 +451,46 @@
 
 (defverb #:hidden (ping) "am I alive?"
   (reply "pong"))
+
+;; TODO -- the "botsnack" and "quote" verbs are, for all intents,
+;; identical; merge them?
+(defverb (botsnack) "a treat"
+  (pm (*response-target*) (random-botsnack)))
+
+(define (random-botsnack)
+  (define len (vector-length botsnack-responses))
+  (vector-ref botsnack-responses (random len)))
+
+(define botsnack-responses
+  #(;; fsbot "standard" responses
+    "yay!"
+    ":)"
+    "\1ACTION dances happily\1"
+    "thank you!"
+    "\1ACTION beams\1"
+    "my favourite snack!"
+
+    ;; rudybot proprietary extensions
+
+    ;;; ungrateful
+    "yech, generic brand"
+    "barely even a mouthful"
+    "mmm ... cheesesteak ..."
+    "do I look like I eat vegan botsnacks?"
+
+    ;;; grateful
+    "you, sir, are a gent of the highest calibre"
+    "thank you and one day I will return the favour"
+    "OMG that's just what I needed LOL"
+
+    ;;; other
+    "yow!"
+    "this is going straight to my thighs"
+    "come on man, one more. I need my fix!"
+    "Mighty tasty cereal flakes, Mrs. McDonough."
+    "A légpárnás tele van angolnák."
+    "\1ACTION wiggles his eyebrows at his cousin gabot\1"
+    ))
 
 ;; ----------------------------------------------------------------------------
 ;; Evaluation related stuffs
@@ -686,21 +747,6 @@
              (string-join (map symbol->string (remove-duplicates libs))
                           ", ")))))
 
-;; Silly stuffs
-
-(define-syntax-rule (defspecbotverbs db ...)
-  (begin (defverb #:hidden (db term (... ...)) "look something up"
-           (pm (*response-target*) (format "specbot: ~a ~a" 'db (string-join term))))
-         ...))
-(defspecbotverbs
-  db clhs r5rs cocoa elisp clim ieee754 ppc posix man cltl2 cltl2-section)
-
-(define-syntax-rule (defminionverbs verb ...)
-  (begin (defverb #:hidden (verb stuff (... ...)) "do some minion work"
-           (pm (*response-target*) (format "minion: ~a ~a" 'verb (string-join stuff))))
-         ...))
-(defminionverbs chant advice memo)
-
 ;; ----------------------------------------------------------------------------
 ;; Master tools
 
@@ -781,7 +827,7 @@
   (define (strip-just-one rx) (curryr (curry regexp-replace rx) ""))
 
   ;; Ideally we'd prevent ACTION from getting into the corpus in the
-  ;; first place.
+  ;; first place.  See https://github.com/offby1/rudybot/issues/14
   (define (trim-ACTION str)
     (regexp-replace #rx"\1ACTION (.*)\1" str "\\1"))
 

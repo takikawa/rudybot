@@ -179,6 +179,7 @@
                "CREATE TABLE IF NOT EXISTS log(text TEXT)"
                "CREATE TABLE IF NOT EXISTS log_word_map(word TEXT, log_id INTEGER)"
                "CREATE INDEX IF NOT EXISTS idx1 ON log_word_map(word)"
+               "CREATE INDEX IF NOT EXISTS idx2 ON log_word_map(log_id)"
 
                "CREATE TABLE IF NOT EXISTS word_popularity (word TEXT PRIMARY KEY, occurrences INTEGER)"
 
@@ -211,7 +212,7 @@
   (string? corpus? . -> . corpus?)
 
   (define (offensive? s)
-    (regexp-match #px"\\bnigger\\b" s))
+    (regexp-match #px"nigger" s))
 
   (when (not (offensive? s))
     (add-sentence-to-corpus s c))

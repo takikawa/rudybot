@@ -12,6 +12,9 @@ available on Ubuntu 10.04 in the "daemontools" package)
 * Get rid of "in/on" in the output of the "seen" command
 surely I can figure out which preposition is appropriate.
 
+https://github.com/offby1/rudybot/issues/23 says more or less the same
+thing.
+
 * Run with "--warn info"
 ... and fix the various lint-like warnings that come up
 
@@ -35,17 +38,17 @@ defverb #:master (censor objectionable_words) ...
 
 would eliminate rows in the incubot db that contain those words.
 
-delete from log_word_map where rowid in ( select log_word_map.log_id from log_word_map where word in 
-        (objectionable_words) );
-delete from log_word_map where word in (objectionable_words) ;
-delete from word_popularity where word in (objectionable_words) ;
+delete from log where rowid in ( select log_word_map.log_id from log_word_map where word in 
+        ("Nasty", "nasty") );
+delete from log_word_map where word in ("Nasty", "nasty") ;
+delete from word_popularity where word in ("Nasty", "nasty") ;
 
 Also note that this will leave ghosts in log_word_map -- references to
 the deleted rows from "log".  This will nix those:
 
         DELETE FROM log_word_map
               WHERE log_id IN (
-                 SELECT log_id 
+                 SELECT DISTINCT log_id 
                    FROM log_word_map 
               LEFT JOIN log 
                      ON log.rowid = log_word_map.log_id
@@ -110,6 +113,23 @@ and do what "let's" would do.
 <jordanb> I'm using emacs over X because it's less broken than tramp.
 ERC> 
 #+END_EXAMPLE
+** Favor utterances whose target word appears early
+Imagine we've chosen the word "enhance", and we find the the DB these two strings:
+"Enhance your manhood with Presto Manhood Enlarger™"
+"I would have preferred to enhance that with soup"
+
+Those strings are about the same length, so the current code will
+weight them about the same.  But there's something to be said for
+giving the first one more weight, since when you read it, you see the
+word earlier ... those examples I just gave above don't really
+demonstrate the value, so let's take a real example:
+
+: 2013-09-08T18:27:18Z incubot-server:incubot chose "enhance", which appears 117 times
+: 2013-09-08T18:27:20Z => PRIVMSG #emacs :macrobat: how do I enable SLIME autocompletion in my lisp buffer? ideally using the auto-complete extension for a nice display of the completion options. I've installed ac-slime, but that only seems to enhance the auto-completion in my SLIME REPL, not the buffer in which I am editing my file.
+
+That utterance is so long that you could die of boredom before getting
+to the bit that uses the word "enhance".  _That_ is why we should
+favor utterances where the word appears early.
 
 * Replace minion
 
@@ -136,3 +156,5 @@ This is also github issue 12: https://github.com/offby1/rudybot/issues/12
 This hopefully won't require a code change, but it'd be good if it
 _didn't_ run as me, since if it did, it could conceivably read my
 Sekrit files.
+* Amend "quotes" list
+... with e.g., http://www.cyber.com.au/~twb/fortunes/emacs.quip
