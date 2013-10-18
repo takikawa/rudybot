@@ -118,7 +118,7 @@
         [(irc-message _ command args _) (log "I seem to have said ~s" (cons command args))])
       (match (*current-message*)
         [(irc-message _ "KICK" (list target victim mumblage) _)
-         (espy target (format "kicking ~a" victim) mumblage)]
+         (espy target (format "kicking ~a" victim) (string-split mumblage " "))]
         [(irc-message _ "MODE" (list target mode-data ...) _)
          (espy target (format "changing the mode to '~a'" mode-data) '())]
         [(irc-message _ "INVITE" (list lucky-recipient party further ...) _)
@@ -144,7 +144,7 @@
          ;; TODO -- call espy with the old nick, or the new one, or both?
          (log "~a wants to be known as ~a" nick new-nick)]
         [(irc-message _ "PART" (list target rest) _)
-         (espy target "leaving the channel" rest)]
+         (espy target "leaving the channel" (string-split rest " "))]
         [(irc-message _
                       "PRIVMSG"
                       (list target
@@ -263,7 +263,7 @@
               ])])]
 
         [(irc-message _ "QUIT" (list quit-message) _)
-         (espy host "quitting" quit-message)]
+         (espy host "quitting" (string-split quit-message " "))]
         [(irc-message _ command args _)
          (log "~a said ~s, which I don't understand" nick
                 (text-from-word (cons command args)))])))
