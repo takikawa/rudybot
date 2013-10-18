@@ -94,8 +94,6 @@
     ;; RFC 1459 suggests that most of this data is ignored.
     (irc-set-user-info (*irc-connection*)
                        "luser"
-                       "unknown-host"
-                       "localhost"
                        (format "Eric Hanchrow's bot, version ~a" (git-version)))
     (if (*nickserv-password*)
         (pm "NickServ" (format "identify ~a" (*nickserv-password*)))
@@ -404,7 +402,7 @@
 \"memoserv\" is available, which in practice, means freenode."
   (let* ([response-target "memoserv"]
          [for-whom        (*for-whom*)])
-    (pm response-target  "send ~a ~a" recipient (string-join message " "))
+    (pm response-target (format "send ~a ~a" recipient (string-join message " ")))
     (reply "I asked `memosrv' to forward the message to ~a." recipient)))
 
 (defverb (help ?what) "what tricks can I do?"
