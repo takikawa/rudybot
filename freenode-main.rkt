@@ -19,7 +19,9 @@
   (clearenv)
   (command-line
    #:program "rudybot"
-   #:once-each)
+   #:once-each
+   [("-p" "--nickserv-password") password "Nickserv password"
+                                 (*nickserv-password* password)])
 
   ;; TODO -- the equivalent of "echo -17 > /proc/self/oom_adj", to
   ;; immunize this process from being killed by the dreaded oom_killer
