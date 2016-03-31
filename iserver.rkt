@@ -73,14 +73,16 @@
 
 (provide make-incubot-server)
 (define (make-incubot-server)
-  (define connection (db:sqlite3-connect
-                      #:database (*db-file-name*)))
+  (define connection
+    (with-handlers ([exn:fail? (λ (e) #f)])
+      (db:sqlite3-connect #:database (*db-file-name*))))
   (lambda (command-sym inp)
-    (match command-sym
-      ['put-string
-       (add-sentence connection inp)]
-      ['get
-       (find-witticism connection (string-join inp " "))])
+    (when connection
+      (match command-sym
+        ['put-string
+         (add-sentence connection inp)]
+        ['get
+         (find-witticism connection (string-join inp " "))]))
     ))
 
 (module+ main
